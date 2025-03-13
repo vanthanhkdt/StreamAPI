@@ -37,15 +37,44 @@ async function sendMessage() {
 
         outputDiv.innerHTML += `<p><strong>Đang nhận dữ liệu...</strong></p>`;
 
+        let buffer = "";  // Bộ đệm dữ liệu để ghép JSON bị cắt
         while (true) {
             const { value, done } = await reader.read();
             if (done) break;
 
-            const text = decoder.decode(value, { stream: true });
+            buffer += decoder.decode(value, { stream: true }); // Ghép phần còn lại từ lần đọc trước
+
             console.log("Received:", text);
 
             // Cập nhật nội dung từng phần mà không chặn UI
             outputDiv.innerHTML += `<span>${text}</span>`;
+
+
+            let lines = buffer.split("\n\n"); // Tách dữ liệu theo dòng SSE
+            buffer = lines.pop(); // Giữ lại phần cuối nếu chưa đủ dữ liệu
+
+            for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                    const jsonString = line.substring(6); // Bỏ "data: "
+                    try {
+                        const eventData = JSON.parse(jsonString);
+
+                        // 🔹 Giải mã Base64 để lấy dữ liệu gốc
+                        const decodedData = atob(eventData.Data);
+
+                        if (eventData.Type === "MetaData") {
+                            document.getElementById("metadata").innerText = "MetaData: " + decodedData;
+                        } else if (eventData.Type === "Tokens") {
+                            conversationDiv.innerText += decodedData + " ";
+                        }
+                    } catch (error) {
+                        console.error("JSON Parse Error:", error, "Raw Data:", jsonString);
+                    }
+                }
+            }
+
+
+
         }
 
     } catch (error) {
